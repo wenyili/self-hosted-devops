@@ -181,6 +181,9 @@ services:
       - GITEA__server__DOMAIN=git.${BASE_DOMAIN}
       - GITEA__server__SSH_DOMAIN=git.${BASE_DOMAIN}
       - GITEA__server__ROOT_URL=https://git.${BASE_DOMAIN}
+      # 临时：允许通过 IP+HTTP 访问时保持会话（避免 Secure Cookie 导致登录循环）
+      - GITEA__session__COOKIE_SECURE=false
+      - GITEA__session__DOMAIN=
       - GITEA__actions__ENABLED=true
       - GITEA__actions__DEFAULT_ACTIONS_URL=https://github.com
       - GITEA__service__DISABLE_REGISTRATION=true
