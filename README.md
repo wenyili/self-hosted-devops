@@ -10,9 +10,10 @@
 |-----|------|------|---------|
 | **Traefik** | v3.1 | 反向代理 + 自动SSL证书管理 | `https://traefik.${BASE_DOMAIN}` |
 | **Portainer** | latest | Docker容器可视化管理 | `https://portainer.${BASE_DOMAIN}` |
-| **PostgreSQL** | 16-alpine | 关系型数据库 | `localhost:5432` |
+| **PostgreSQL** | 16-alpine | 关系型数据库 | `localhost:${POSTGRES_PORT}`（默认 `5432`） |
+| **pgAdmin** | latest | PostgreSQL 可视化管理 | `https://pgadmin.${BASE_DOMAIN}` 或 `http://<IP>:${PGADMIN_PORT}` |
 | **MinIO** | latest | S3兼容对象存储 | `https://minio.${BASE_DOMAIN}` |
-| **Gitea** | 1.21 | 自托管Git服务 + Actions | `https://git.${BASE_DOMAIN}` |
+| **Gitea** | 1.21 | 自托管Git服务 + Actions | `https://git.${BASE_DOMAIN}` 或 `http://<IP>:${GITEA_HTTP_PORT}`（SSH: `<IP>:${GITEA_SSH_PORT}`） |
 | **Gitea Runner** | latest | CI/CD任务执行器 | 内部服务 |
 | **Docker Registry** | 2.8 | 私有Docker镜像仓库 | `https://registry.${BASE_DOMAIN}` |
 
@@ -94,12 +95,19 @@ Traefik (反向代理 + SSL)
 - `minio.${BASE_DOMAIN}` - MinIO API端点
 - `minio-console.${BASE_DOMAIN}` - MinIO管理控制台
 - `registry.${BASE_DOMAIN}` - Docker镜像仓库
+- `pgadmin.${BASE_DOMAIN}` - pgAdmin 数据库管理界面（IP访问：`http://<IP>:${PGADMIN_PORT}`）
+  
+IP+端口直连（域名不可用时）：
+- PostgreSQL: `http://<IP>:${POSTGRES_PORT}`（默认 `5432`）
+- Gitea Web: `http://<IP>:${GITEA_HTTP_PORT}`（默认 `3000`）
+- Gitea SSH: `<IP>:${GITEA_SSH_PORT}`（默认 `2222`）
 
 ## 数据持久化
 
 所有重要数据存储在Docker Volumes中：
 
 - `postgres_data` - 数据库文件
+- `pgadmin_data` - pgAdmin 配置/会话数据
 - `gitea_data` - Git仓库和配置
 - `minio_data` - 对象存储数据
 - `traefik_acme` - SSL证书
