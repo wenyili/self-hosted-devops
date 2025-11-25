@@ -21,12 +21,22 @@
 
 ### 3. PostgreSQL (关系型数据库)
 - **版本**：16-alpine
-- **端口**：5432
+- **端口**：
+  - 内部: 5432
+  - 直连: `${POSTGRES_PORT}`（默认 5432，IP+端口）
 - **数据库**：
   - `postgres` - 默认数据库
   - `gitea` - Gitea专用数据库
 - **用途**：项目数据存储、Gitea后端存储
 - **健康检查**：每10秒检查一次
+
+### 3.1 pgAdmin (PostgreSQL 可视化管理)
+- **功能**：管理数据库、用户、备份恢复、查看查询
+- **端口**：
+  - Traefik: 443（通过域名 `pgadmin.${BASE_DOMAIN}`）
+  - 直连: `${PGADMIN_PORT}`（默认 5050，`http://<服务器IP>:5050`）
+- **用途**：开发/运维人员图形化管理 PostgreSQL
+- **认证**：使用 `PGADMIN_DEFAULT_EMAIL` + `secrets/pgadmin_password.txt`
 
 ### 4. MinIO (对象存储)
 - **功能**：S3兼容对象存储
@@ -40,8 +50,8 @@
 ### 5. Gitea (Git仓库服务)
 - **版本**：1.21
 - **端口**：
-  - 3000 (Web界面)
-  - 2222 (SSH访问)
+  - 内部: 3000 (Web), 22 (SSH)
+  - 直连: `${GITEA_HTTP_PORT}` (默认 3000), `${GITEA_SSH_PORT}` (默认 2222)
 - **功能**：
   - Git仓库托管
   - Gitea Actions (CI/CD)
@@ -145,6 +155,7 @@
 | MinIO Console | `minio-console.${BASE_DOMAIN}` | MinIO管理控制台 |
 | Gitea | `git.${BASE_DOMAIN}` | Git仓库Web界面 |
 | Registry | `registry.${BASE_DOMAIN}` | Docker镜像仓库 |
+| pgAdmin | `pgadmin.${BASE_DOMAIN}` | PostgreSQL 管理界面（或 `http://<IP>:${PGADMIN_PORT}`） |
 
 **说明**: 域名通过 `.env` 文件中的 `BASE_DOMAIN` 变量配置。例如设置 `BASE_DOMAIN=example.com`，则 Traefik 域名为 `traefik.example.com`。
 
@@ -171,14 +182,16 @@ MinIO (存储层)
 - **Portainer**: https://portainer.your-domain.com
 - **MinIO Console**: https://minio-console.your-domain.com
 - **Gitea**: https://git.your-domain.com
+  - 直连: http://<IP>:${GITEA_HTTP_PORT}（默认 3000）
+- **pgAdmin**: https://pgadmin.your-domain.com（或 http://<IP>:5050）
 
 ### API端点
 - **MinIO S3 API**: https://minio.your-domain.com
 - **Docker Registry**: https://registry.your-domain.com
-- **PostgreSQL**: `服务器IP:5432`
+- **PostgreSQL**: `服务器IP:${POSTGRES_PORT}`（默认 5432）
 
 ### SSH访问
-- **Gitea SSH**: `git.your-domain.com:2222`
+- **Gitea SSH**: `git.your-domain.com:2222`（直连: `<IP>:${GITEA_SSH_PORT}`，默认 2222）
 
 **注意**: 将 `your-domain.com` 替换为你在 `.env` 中配置的 `BASE_DOMAIN` 实际值。
 

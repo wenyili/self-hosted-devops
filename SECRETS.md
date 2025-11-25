@@ -10,6 +10,7 @@ infrastructure/
 ├── .env                            # 环境变量配置
 ├── secrets/
 │   ├── postgres_password.txt       # PostgreSQL数据库密码
+│   ├── pgadmin_password.txt        # pgAdmin 默认登录密码
 │   ├── minio_root_password.txt     # MinIO管理员密码
 │   ├── traefik_users.txt          # Traefik管理界面认证用户
 │   ├── gitea_db_password.txt      # Gitea数据库密码
@@ -46,6 +47,11 @@ EOF
 **PostgreSQL密码** (建议使用强密码):
 ```bash
 echo "your_secure_postgres_password_123" > secrets/postgres_password.txt
+```
+
+**pgAdmin 默认登录密码** (建议使用强密码):
+```bash
+echo "your_secure_pgadmin_password_123" > secrets/pgadmin_password.txt
 ```
 
 **MinIO管理员密码** (至少8个字符):
@@ -102,6 +108,15 @@ chmod 700 secrets/       # 只有所有者可访问目录
 - **用户**: `postgres` (超级用户)
 - **数据库**: `postgres`, `gitea`
 - **用途**: 数据库管理员密码
+
+### pgAdmin配置
+- **Secret**: `pgadmin_password` → `/run/secrets/pgadmin_password`
+- **环境变量**: `PGADMIN_DEFAULT_EMAIL`, `PGADMIN_DEFAULT_PASSWORD_FILE`
+- **用途**: pgAdmin 管理界面登录账号与密码
+- **访问**:
+  - 域名: `https://pgadmin.${BASE_DOMAIN}`（通过 Traefik + HTTPS）
+  - IP+端口: `http://<服务器IP>:${PGADMIN_PORT}`（默认 `5050`）
+  - 首次登录后，在 pgAdmin 中添加服务器：主机 `postgres`，端口 `5432`，用户名 `postgres`，密码为 `secrets/postgres_password.txt` 内容。
 
 ### MinIO配置
 - **Secret**: `minio_root_password` → `/run/secrets/minio_root_password`
