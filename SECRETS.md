@@ -76,12 +76,38 @@ htpasswd -nbB admin your_traefik_password > secrets/traefik_users.txt
 docker run --rm httpd:2.4-alpine htpasswd -nbB registry your_registry_password > secrets/registry_htpasswd.txt
 ```
 
-**阿里云OSS凭证** (用于备份，可选):
-```bash
-# 从阿里云RAM控制台获取AccessKey
-echo "LTAI5t..." > secrets/alicloud_access_key.txt
-echo "your_secret_key" > secrets/alicloud_secret_key.txt
-```
+**阿里云OSS凭证** (用于 `gitea-backup` 服务定时备份 Gitea):
+
+1. 在 OSS 控制台单独新建一个小 bucket 专供备份使用（不要复用 Registry 用的 MinIO），例如 `your-gitea-backup-bucket`，存储类型选**标准存储**，读写权限选**私有**。
+2. 在 RAM 访问控制控制台创建一个子账号（不要用主账号 AK/SK），只授予该 bucket 的最小权限，自定义策略示例：
+   ```json
+   {
+     "Version": "1",
+     "Statement": [
+       {
+         "Effect": "Allow",
+         "Action": [
+           "oss:PutObject",
+           "oss:GetObject",
+           "oss:ListObjects",
+           "oss:DeleteObject"
+         ],
+         "Resource": [
+           "acs:oss:*:*:your-gitea-backup-bucket",
+           "acs:oss:*:*:your-gitea-backup-bucket/*"
+         ]
+       }
+     ]
+   }
+   ```
+3. 为该子账号创建 AccessKey，写入密钥文件：
+   ```bash
+   echo "LTAI5t..." > secrets/alicloud_access_key.txt
+   echo "your_secret_key" > secrets/alicloud_secret_key.txt
+   ```
+4. 在该 bucket 上配置生命周期规则，控制云端存储成本上限：控制台 → 该 bucket → 基础设置 → 生命周期 → 新建规则 → 前缀填 `gitea-backups/`（对应 `.env` 中的 `OSS_PREFIX`）→ 启用 → 设置"最后修改时间超过 30 天后删除"。这样即使备份脚本的本地保留逻辑出问题，云端存储也不会无限增长产生费用。
+5. 在 `.env` 中设置 `OSS_ENDPOINT`、`OSS_BUCKET`、`OSS_PREFIX`（详见 `.env.example`）。
+6. 建议在阿里云费用中心开启消费提醒，作为费用监控的第二道保险。
 
 ### 4. 设置文件权限 (推荐)
 ```bash
@@ -143,11 +169,12 @@ chmod 700 secrets/       # 只有所有者可访问目录
 - **用户名**: 在htpasswd文件中定义 (推荐使用`registry`)
 - **用途**: 镜像推送/拉取认证 + MinIO存储后端
 
-### 阿里云OSS配置 (备份用，可选)
+### 阿里云OSS配置 (gitea-backup 服务使用)
 - **Secret**: `alicloud_access_key` → `/run/secrets/alicloud_access_key`
 - **Secret**: `alicloud_secret_key` → `/run/secrets/alicloud_secret_key`
-- **用途**: 备份数据到阿里云OSS
-- **注意**: 仅在配置备份服务时需要
+- **Secret**: `gitea_db_password`（复用，用于 `pg_dump` 导出 `gitea` 数据库）
+- **用途**: `gitea-backup` 服务按 `BACKUP_CRON_SCHEDULE` 定时把 Gitea 仓库数据 + 数据库 dump 打包上传到 OSS
+- **注意**: 未配置这两个 secret 文件时 `gitea-backup` 容器会启动失败（`entrypoint.sh` 会因读取不到密钥文件而报错），如暂不需要自动备份，可以直接在 `docker-compose.yml` 中注释掉该服务
 
 ## 部署命令
 
