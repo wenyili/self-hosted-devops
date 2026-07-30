@@ -239,6 +239,7 @@ services:
     build: ./backup
     container_name: gitea-backup
     restart: unless-stopped
+    init: true
     environment:
       - PG_HOST=postgres
       - PG_PORT=5432

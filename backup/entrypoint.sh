@@ -18,6 +18,10 @@ acl = private
 EOF
 chmod 600 "${RCLONE_CONFIG_DIR}/rclone.conf"
 
+if [ "$#" -gt 0 ]; then
+  exec "$@"
+fi
+
 CRON_SCHEDULE="${BACKUP_CRON_SCHEDULE:-0 3 * * *}"
 echo "${CRON_SCHEDULE} /usr/local/bin/backup.sh >> /proc/1/fd/1 2>> /proc/1/fd/2" > /etc/crontabs/root
 
