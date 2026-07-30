@@ -15,6 +15,7 @@
 | **MinIO** | latest | S3兼容对象存储 | `https://minio.${BASE_DOMAIN}` |
 | **Gitea** | 1.21 | 自托管Git服务 + Actions | `https://git.${BASE_DOMAIN}` 或 `http://<IP>:${GITEA_HTTP_PORT}`（SSH: `<IP>:${GITEA_SSH_PORT}`） |
 | **Gitea Runner** | latest | CI/CD任务执行器 | 内部服务 |
+| **Gitea Backup** | 自建 | 定时备份Gitea数据到阿里云OSS | 内部服务 |
 | **Docker Registry** | 2.8 | 私有Docker镜像仓库 | `https://registry.${BASE_DOMAIN}` |
 
 ### 功能特性
@@ -82,6 +83,7 @@ Traefik (反向代理 + SSL)
 
 内部网络:
    ├─ Gitea Runner (CI/CD执行器)
+   ├─ Gitea Backup (定时备份 → 阿里云OSS)
    └─ PostgreSQL (数据库)
 ```
 
@@ -113,6 +115,7 @@ IP+端口直连（域名不可用时）：
 - `traefik_acme` - SSL证书
 - `portainer_data` - Portainer配置
 - `gitea_runner_data` - Runner缓存
+- `backup_data` - `gitea-backup` 服务的本地备份归档（滚动保留最近 N 份，同时上传一份到阿里云OSS）
 
 ## 常用命令
 
@@ -142,13 +145,41 @@ docker-compose up -d
 - Gitea禁用公开注册，需要登录才能查看
 - Docker Registry使用htpasswd认证
 
-## 备份建议
+## 备份
 
-定期备份以下数据：
-- PostgreSQL数据库（使用pg_dump）
-- Gitea数据目录
-- MinIO对象存储
-- `.env` 和 `secrets/` 目录
+`gitea-backup` 服务会按 `.env` 中的 `BACKUP_CRON_SCHEDULE`（默认每天 03:00）自动执行：
+
+1. `pg_dump` 导出 PostgreSQL 中的 `gitea` 数据库
+2. 打包 `gitea_data` 卷（仓库文件、`app.ini`、attachments 等）
+3. 合并为单个归档写入本地 `backup_data` 卷（默认保留最近 `BACKUP_LOCAL_KEEP` 份，超出自动删除）
+4. 上传到阿里云 OSS（`OSS_BUCKET`/`OSS_PREFIX`），云端过期依赖 bucket 的生命周期规则（见 [SECRETS.md](SECRETS.md)）
+
+配置步骤（RAM子账号、bucket、生命周期规则）见 [SECRETS.md](SECRETS.md) 中"阿里云OSS配置"一节。
+
+**手动立即触发一次备份**（用于验证配置是否正确）：
+```bash
+docker compose run --rm gitea-backup /usr/local/bin/backup.sh
+docker compose logs -f gitea-backup
+```
+
+**其它需要手动保管的数据**：`.env` 和 `secrets/` 目录（含所有密码和 OSS 密钥），以及 MinIO 对象存储（如有需要，自行定期同步）。
+
+### 从 OSS 恢复备份
+
+恢复是破坏性操作（会覆盖现有数据），需要人工确认后手动执行，没有自动化脚本：
+
+1. 从 OSS 下载指定日期的备份：
+   ```bash
+   docker compose run --rm gitea-backup rclone copy oss:${OSS_BUCKET}/${OSS_PREFIX}/gitea_backup_<时间戳>.tar /backup/
+   ```
+2. 解压得到数据库 dump 和仓库数据：
+   ```bash
+   docker compose exec gitea-backup tar xf /backup/gitea_backup_<时间戳>.tar -C /backup/restore
+   ```
+3. 停止 `gitea` 容器：`docker compose stop gitea`
+4. 恢复数据库：清空/重建 `gitea` 库后，用 `psql` 导入解压出的 `gitea_db.sql.gz`
+5. 清空 `gitea_data` 卷内容，解压 `gitea_data.tar.gz` 到位
+6. 重启 `gitea` 容器并验证：`docker compose start gitea`
 
 ## 许可证
 

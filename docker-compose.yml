@@ -234,6 +234,36 @@ services:
       - GITEA_RUNNER_LABELS=ubuntu-latest:docker://ghcr.io/catthehacker/ubuntu:act-22.04,ubuntu-22.04:docker://ghcr.io/catthehacker/ubuntu:act-22.04,ubuntu-24.04:docker://ghcr.io/catthehacker/ubuntu:act-22.04
       - GITEA_RUNNER_SCOPE=global
 
+  # Gitea Backup - 定时打包 Gitea 数据 + 数据库并上传到阿里云 OSS
+  gitea-backup:
+    build: ./backup
+    container_name: gitea-backup
+    restart: unless-stopped
+    environment:
+      - PG_HOST=postgres
+      - PG_PORT=5432
+      - PG_DATABASE=gitea
+      - PG_USER=gitea
+      - OSS_ENDPOINT=${OSS_ENDPOINT:-oss-cn-hangzhou.aliyuncs.com}
+      - OSS_BUCKET=${OSS_BUCKET}
+      - OSS_PREFIX=${OSS_PREFIX:-gitea-backups}
+      - BACKUP_CRON_SCHEDULE=${BACKUP_CRON_SCHEDULE:-0 3 * * *}
+      - BACKUP_LOCAL_KEEP=${BACKUP_LOCAL_KEEP:-7}
+    volumes:
+      - gitea_data:/source/gitea_data:ro
+      - backup_data:/backup
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    networks:
+      - internal
+    depends_on:
+      - postgres
+      - gitea
+    secrets:
+      - gitea_db_password
+      - alicloud_access_key
+      - alicloud_secret_key
+
   # Docker Registry - 私有镜像仓库
   registry:
     image: registry:2.8
