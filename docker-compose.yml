@@ -1,3 +1,10 @@
+# 日志轮转：每个容器最多保留 3 个 10MB 的日志文件，避免 json.log 无限增长
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 networks:
   traefik:
     external: true
@@ -38,6 +45,7 @@ services:
     image: traefik:v3.1
     container_name: traefik
     restart: unless-stopped
+    logging: *default-logging
     ports:
       - "80:80"
       - "443:443"
@@ -91,6 +99,7 @@ services:
     image: portainer/portainer-ce:latest
     container_name: portainer
     restart: unless-stopped
+    logging: *default-logging
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - portainer_data:/data
@@ -108,6 +117,7 @@ services:
     image: postgres:16-alpine
     container_name: postgres
     restart: unless-stopped
+    logging: *default-logging
     secrets:
       - postgres_password
     environment:
@@ -132,6 +142,7 @@ services:
     image: minio/minio:latest
     container_name: minio
     restart: unless-stopped
+    logging: *default-logging
     secrets:
       - minio_root_password
     environment:
@@ -170,6 +181,7 @@ services:
     image: gitea/gitea:1.21
     container_name: gitea
     restart: unless-stopped
+    logging: *default-logging
     environment:
       - USER_UID=1000
       - USER_GID=1000
@@ -219,6 +231,7 @@ services:
     image: gitea/act_runner:latest
     container_name: gitea-runner
     restart: unless-stopped
+    logging: *default-logging
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - gitea_runner_data:/data
@@ -239,6 +252,7 @@ services:
     build: ./backup
     container_name: gitea-backup
     restart: unless-stopped
+    logging: *default-logging
     init: true
     environment:
       - PG_HOST=postgres
@@ -270,6 +284,7 @@ services:
     image: registry:2.8
     container_name: registry
     restart: unless-stopped
+    logging: *default-logging
     volumes:
       - ./registry/config.yml:/etc/docker/registry/config.yml:ro
       - ./registry/entrypoint.sh:/entrypoint.sh:ro
@@ -299,6 +314,7 @@ services:
     image: dpage/pgadmin4:latest
     container_name: pgadmin
     restart: unless-stopped
+    logging: *default-logging
     environment:
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
       PGADMIN_DEFAULT_PASSWORD_FILE: /run/secrets/pgadmin_password
