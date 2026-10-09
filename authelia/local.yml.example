@@ -1,0 +1,19 @@
+# 复制为 local.yml 并按你的环境修改（该文件已被 .gitignore 忽略）
+access_control:
+  default_policy: deny
+  rules:
+    # 按应用限定可登录的用户；也可以用 group:xxx（组在 users_database.yml 里定义）
+    - domain:
+        - app.example.com
+      subject:
+        - 'user:alice'
+      policy: one_factor
+
+session:
+  cookies:
+    - domain: example.com
+      authelia_url: https://auth.example.com
+      default_redirection_url: https://app.example.com
+      expiration: 30d
+      inactivity: 30d
+      remember_me: 1y

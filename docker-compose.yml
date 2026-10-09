@@ -219,6 +219,8 @@ services:
     container_name: authelia
     restart: unless-stopped
     logging: *default-logging
+    # configuration.yml 为通用配置；local.yml（域名、用户名，不入库）与它合并加载
+    command: ["--config", "/config/configuration.yml", "--config", "/config/local.yml"]
     environment:
       AUTHELIA_IDENTITY_VALIDATION_RESET_PASSWORD_JWT_SECRET_FILE: /run/secrets/authelia_jwt_secret
       AUTHELIA_SESSION_SECRET_FILE: /run/secrets/authelia_session_secret

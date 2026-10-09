@@ -13,46 +13,7 @@ authentication_backend:
   password_reset:
     disable: true
 
-access_control:
-  default_policy: deny
-  rules:
-    # 按应用限定可登录的用户（与迁移前 BasicAuth 的用户名单保持一致）
-    - domain:
-        - myapps.liwenyi.fun
-        - traefik.liwenyi.fun
-      subject:
-        - 'user:liwenyi'
-        - 'user:suxuechao'
-      policy: one_factor
-    - domain: bread.liwenyi.fun
-      subject:
-        - 'user:admin'
-        - 'user:liwenyi'
-      policy: one_factor
-    - domain: fishery.liwenyi.fun
-      subject:
-        - 'user:liwenyi'
-        - 'user:李传兴'
-        - 'user:admin'
-      policy: one_factor
-
-session:
-  cookies:
-    - domain: liwenyi.fun
-      authelia_url: https://auth.liwenyi.fun
-      default_redirection_url: https://myapps.liwenyi.fun
-      # 手机上尽量少登录：会话 30 天不过期，勾选"记住我"则 1 年
-      expiration: 30d
-      inactivity: 30d
-      remember_me: 1y
-
-webauthn:
-  display_name: liwenyi.fun
-  timeout: 60s
-
-totp:
-  issuer: liwenyi.fun
-
+# access_control 与 session.cookies（域名、用户名）见 local.yml，示例见 local.yml.example
 regulation:
   max_retries: 5
   find_time: 5m
