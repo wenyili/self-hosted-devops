@@ -36,3 +36,4 @@ temp/
 # Authelia 用户库（含密码 hash）
 authelia/users_database.yml
 authelia/local.yml
+authelia/local.yml.prev

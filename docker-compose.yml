@@ -10,6 +10,9 @@ networks:
     external: true
   internal:
     driver: bridge
+  # 仅 authelia 与它的 redis 使用的隔离网络（internal: 无外网、其它容器接不进来），所以 redis 不需要密码
+  auth:
+    internal: true
 
 volumes:
   traefik_acme:
@@ -18,6 +21,7 @@ volumes:
   gitea_runner_data:
   backup_data:
   authelia_data:
+  authelia_redis_data:
 
 secrets:
   postgres_password:
@@ -213,6 +217,23 @@ services:
       - alicloud_access_key
       - alicloud_secret_key
 
+  # Redis - 保存 Authelia 的登录会话（重启 Authelia 不会把所有人登出）
+  authelia-redis:
+    image: redis:7-alpine
+    container_name: authelia-redis
+    restart: unless-stopped
+    logging: *default-logging
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
+    volumes:
+      - authelia_redis_data:/data
+    networks:
+      - auth
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
   # Authelia - 统一登录（SSO），通过 forwardAuth 中间件 `authelia@docker` 保护各应用
   authelia:
     image: authelia/authelia:4.39
@@ -236,6 +257,10 @@ services:
       - /etc/localtime:/etc/localtime:ro
     networks:
       - traefik
+      - auth
+    depends_on:
+      authelia-redis:
+        condition: service_healthy
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.authelia.rule=Host(`auth.${BASE_DOMAIN}`)"
