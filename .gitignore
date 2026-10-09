@@ -32,3 +32,6 @@ logs/
 # 临时文件
 tmp/
 temp/
+
+# Authelia 用户库（含密码 hash）
+authelia/users_database.yml

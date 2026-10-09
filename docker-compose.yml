@@ -13,31 +13,27 @@ networks:
 
 volumes:
   traefik_acme:
-  portainer_data:
   postgres_data:
-  minio_data:
   gitea_data:
   gitea_runner_data:
   backup_data:
-  pgadmin_data:
+  authelia_data:
 
 secrets:
   postgres_password:
     file: ./secrets/postgres_password.txt
-  pgadmin_password:
-    file: ./secrets/pgadmin_password.txt
-  minio_root_password:
-    file: ./secrets/minio_root_password.txt
-  traefik_users:
-    file: ./secrets/traefik_users.txt
   gitea_db_password:
     file: ./secrets/gitea_db_password.txt
   alicloud_access_key:
     file: ./secrets/alicloud_access_key.txt
   alicloud_secret_key:
     file: ./secrets/alicloud_secret_key.txt
-  registry_htpasswd:
-    file: ./secrets/registry_htpasswd.txt
+  authelia_jwt_secret:
+    file: ./secrets/authelia_jwt_secret.txt
+  authelia_session_secret:
+    file: ./secrets/authelia_session_secret.txt
+  authelia_storage_key:
+    file: ./secrets/authelia_storage_key.txt
 
 services:
   # Traefik - 反向代理和SSL证书管理
@@ -49,12 +45,9 @@ services:
     ports:
       - "80:80"
       - "443:443"
-      - "8080:8080"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - traefik_acme:/acme
-    secrets:
-      - traefik_users
     command:
       # 启用Docker提供者
       - --providers.docker=true
@@ -72,7 +65,6 @@ services:
       
       # 启用API和控制台
       - --api.dashboard=true
-      - --api.insecure=true
       
       # 日志配置
       - --log.level=INFO
@@ -90,27 +82,8 @@ services:
       - "traefik.http.routers.traefik.entrypoints=websecure"
       - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"
       - "traefik.http.routers.traefik.service=api@internal"
-      # 基本认证中间件
-      - "traefik.http.middlewares.traefik-auth.basicauth.usersfile=/run/secrets/traefik_users"
-      - "traefik.http.routers.traefik.middlewares=traefik-auth"
-
-  # Portainer - Docker容器管理界面
-  portainer:
-    image: portainer/portainer-ce:latest
-    container_name: portainer
-    restart: unless-stopped
-    logging: *default-logging
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - portainer_data:/data
-    networks:
-      - traefik
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.portainer.rule=Host(`portainer.${BASE_DOMAIN}`)"
-      - "traefik.http.routers.portainer.entrypoints=websecure"
-      - "traefik.http.routers.portainer.tls.certresolver=letsencrypt"
-      - "traefik.http.services.portainer.loadbalancer.server.port=9000"
+      # 控制台仅经 HTTPS 域名访问，由 Authelia 统一登录保护（不再开放 8080 端口）
+      - "traefik.http.routers.traefik.middlewares=authelia@docker"
 
   # PostgreSQL - 关系型数据库
   postgres:
@@ -129,52 +102,14 @@ services:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - internal
+    # 仅绑定回环地址：外网不可达，本机通过 `ssh -L 5432:localhost:5432` 隧道访问
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "127.0.0.1:5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
       timeout: 5s
       retries: 5
-
-  # MinIO - S3兼容对象存储
-  minio:
-    image: minio/minio:latest
-    container_name: minio
-    restart: unless-stopped
-    logging: *default-logging
-    secrets:
-      - minio_root_password
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD_FILE: /run/secrets/minio_root_password
-      MINIO_BROWSER_REDIRECT_URL: https://minio-console.${BASE_DOMAIN}
-    volumes:
-      - minio_data:/data
-    networks:
-      - traefik
-      - internal
-    command: server /data --console-address ":9001"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 30s
-      timeout: 20s
-      retries: 3
-    labels:
-      # MinIO API
-      - "traefik.enable=true"
-      - "traefik.http.routers.minio-api.rule=Host(`minio.${BASE_DOMAIN}`)"
-      - "traefik.http.routers.minio-api.entrypoints=websecure"
-      - "traefik.http.routers.minio-api.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.minio-api.service=minio-api"
-      - "traefik.http.services.minio-api.loadbalancer.server.port=9000"
-      
-      # MinIO Console
-      - "traefik.http.routers.minio-console.rule=Host(`minio-console.${BASE_DOMAIN}`)"
-      - "traefik.http.routers.minio-console.entrypoints=websecure"
-      - "traefik.http.routers.minio-console.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.minio-console.service=minio-console"
-      - "traefik.http.services.minio-console.loadbalancer.server.port=9001"
 
   # Gitea - Git仓库服务
   gitea:
@@ -205,7 +140,6 @@ services:
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
     ports:
-      - "${GITEA_HTTP_PORT:-3000}:3000"
       - "${GITEA_SSH_PORT:-2222}:22"
     networks:
       - traefik
@@ -279,58 +213,34 @@ services:
       - alicloud_access_key
       - alicloud_secret_key
 
-  # Docker Registry - 私有镜像仓库
-  registry:
-    image: registry:2.8
-    container_name: registry
-    restart: unless-stopped
-    logging: *default-logging
-    volumes:
-      - ./registry/config.yml:/etc/docker/registry/config.yml:ro
-      - ./registry/entrypoint.sh:/entrypoint.sh:ro
-      - ./secrets/registry_htpasswd.txt:/auth/htpasswd:ro
-      - /etc/timezone:/etc/timezone:ro
-      - /etc/localtime:/etc/localtime:ro
-    command: ["/bin/sh", "/entrypoint.sh"]
-    networks:
-      - traefik
-      - internal
-    dns_search: ["."]
-    depends_on:
-      - minio
-    secrets:
-      - minio_root_password
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.registry.rule=Host(`registry.${BASE_DOMAIN}`)"
-      - "traefik.http.routers.registry.entrypoints=websecure"
-      - "traefik.http.routers.registry.tls.certresolver=letsencrypt"
-      - "traefik.http.services.registry.loadbalancer.server.port=5000"
-    healthcheck:
-      disable: true
-
-  # pgAdmin 4 - PostgreSQL 可视化管理
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: pgadmin
+  # Authelia - 统一登录（SSO），通过 forwardAuth 中间件 `authelia@docker` 保护各应用
+  authelia:
+    image: authelia/authelia:4.39
+    container_name: authelia
     restart: unless-stopped
     logging: *default-logging
     environment:
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
-      PGADMIN_DEFAULT_PASSWORD_FILE: /run/secrets/pgadmin_password
+      AUTHELIA_IDENTITY_VALIDATION_RESET_PASSWORD_JWT_SECRET_FILE: /run/secrets/authelia_jwt_secret
+      AUTHELIA_SESSION_SECRET_FILE: /run/secrets/authelia_session_secret
+      AUTHELIA_STORAGE_ENCRYPTION_KEY_FILE: /run/secrets/authelia_storage_key
     secrets:
-      - pgadmin_password
+      - authelia_jwt_secret
+      - authelia_session_secret
+      - authelia_storage_key
     volumes:
-      - pgadmin_data:/var/lib/pgadmin
+      - ./authelia:/config
+      - authelia_data:/data
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
     networks:
       - traefik
-      - internal
-    # 同时支持域名访问与 IP+端口访问（默认 5050）
-    ports:
-      - "${PGADMIN_PORT:-5050}:80"
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.pgadmin.rule=Host(`pgadmin.${BASE_DOMAIN}`)"
-      - "traefik.http.routers.pgadmin.entrypoints=websecure"
-      - "traefik.http.routers.pgadmin.tls.certresolver=letsencrypt"
-      - "traefik.http.services.pgadmin.loadbalancer.server.port=80"
+      - "traefik.http.routers.authelia.rule=Host(`auth.${BASE_DOMAIN}`)"
+      - "traefik.http.routers.authelia.entrypoints=websecure"
+      - "traefik.http.routers.authelia.tls.certresolver=letsencrypt"
+      - "traefik.http.services.authelia.loadbalancer.server.port=9091"
+      # 供各应用引用：traefik.http.routers.<app>.middlewares=authelia@docker,...
+      - "traefik.http.middlewares.authelia.forwardauth.address=http://authelia:9091/api/authz/forward-auth"
+      - "traefik.http.middlewares.authelia.forwardauth.trustForwardHeader=true"
+      - "traefik.http.middlewares.authelia.forwardauth.authResponseHeaders=Remote-User,Remote-Groups,Remote-Name,Remote-Email"
