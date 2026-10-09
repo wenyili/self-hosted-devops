@@ -32,7 +32,8 @@
 - **用户**：`authelia/users_database.yml`（不进 git，模板见 `.example`，root 所有需 sudo）；hash 用
   `docker run --rm -it authelia/authelia:4.39 authelia crypto hash generate argon2` 生成，改文件后 `docker restart authelia`
 - **访问规则**：服务器上的 `authelia/local.yml` 由部署工具生成（域名与用户名**不入库**）：各应用的访问规则声明在私有仓库 `apps-hub` 的 `apps/<name>/access.yml`，部署时合并、校验后写入并重启 Authelia；`configuration.yml` 只放通用配置，两者合并加载
-- **改完配置**：`sudo cp` 到服务器 `authelia/` 后 `docker restart authelia`（重启会让现有登录会话失效）
+- **用户**：`users_database.yml` 同样由部署工具生成并管理（用户清单在私有仓库里）；密码为 argon2id hash，生成方式 `docker run --rm -it authelia/authelia:4.39 authelia crypto hash generate argon2`
+- **会话存储**：Redis（`authelia-redis`，放在只有 Authelia 能访问的隔离内部网络，AOF 持久化），重启 Authelia 不会让用户重新登录
 - **密钥**：`secrets/authelia_{jwt_secret,session_secret,storage_key}.txt`
 
 ### 4. Gitea (Git仓库服务)
