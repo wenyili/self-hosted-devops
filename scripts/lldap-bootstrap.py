@@ -76,9 +76,12 @@ def main():
         for g in seed.get("groups", []):
             ensure_group(g)
         for uid, u in (seed.get("users") or {}).items():
-            ensure_user(uid, u["email"], u.get("displayname", uid))
-            for g in u.get("groups", []):
-                join(uid, g)
+            try:
+                ensure_user(uid, u["email"], u.get("displayname", uid))
+                for g in u.get("groups", []):
+                    join(uid, g)
+            except RuntimeError as e:   # 例如 lldap 不接受某些用户名字符；不中断其它用户
+                print(f"  ✘ 用户 {uid} 创建/加组失败: {e}", file=sys.stderr)
     print("完成")
 
 
