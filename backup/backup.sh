@@ -28,11 +28,24 @@ PGPASSWORD=$(cat /run/secrets/gitea_db_password) \
   pg_dump -h "$PG_HOST" -p "$PG_PORT" -U "$PG_USER" -d "$PG_DATABASE" \
   | gzip > "${WORKDIR}/gitea_db.sql.gz"
 
+# 其它数据库：以超级用户逐个导出（排除 gitea 本身——上面已导出——和 postgres 系统库）。
+EXTRA_DBS=""
+if [ "${BACKUP_ALL_DATABASES:-0}" = "1" ]; then
+  export PGPASSWORD="$(cat /run/secrets/postgres_password)"
+  for db in $(psql -h "$PG_HOST" -p "$PG_PORT" -U postgres -d postgres -Atc \
+      "select datname from pg_database where not datistemplate and datname not in ('postgres','${PG_DATABASE}') order by 1"); do
+    log "导出 PostgreSQL 数据库 ${db}..."
+    pg_dump -h "$PG_HOST" -p "$PG_PORT" -U postgres -d "$db" | gzip > "${WORKDIR}/db_${db}.sql.gz"
+    EXTRA_DBS="${EXTRA_DBS} db_${db}.sql.gz"
+  done
+  unset PGPASSWORD
+fi
+
 log "打包 gitea_data 卷..."
 tar czf "${WORKDIR}/gitea_data.tar.gz" -C /source/gitea_data --exclude='log' .
 
 log "生成最终归档 ${ARCHIVE_NAME}（内部两个成员已各自压缩，外层不再重复压缩）..."
-tar cf "$FINAL_PATH" -C "$WORKDIR" gitea_db.sql.gz gitea_data.tar.gz
+tar cf "$FINAL_PATH" -C "$WORKDIR" gitea_db.sql.gz gitea_data.tar.gz $EXTRA_DBS
 
 SIZE=$(du -h "$FINAL_PATH" | cut -f1)
 log "本地归档完成: ${FINAL_PATH} (${SIZE})"

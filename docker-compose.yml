@@ -22,6 +22,7 @@ volumes:
   backup_data:
   authelia_data:
   authelia_redis_data:
+  lldap_data:
 
 secrets:
   postgres_password:
@@ -38,6 +39,14 @@ secrets:
     file: ./secrets/authelia_session_secret.txt
   authelia_storage_key:
     file: ./secrets/authelia_storage_key.txt
+  lldap_jwt_secret:
+    file: ./secrets/lldap_jwt_secret.txt
+  lldap_key_seed:
+    file: ./secrets/lldap_key_seed.txt
+  lldap_admin_password:
+    file: ./secrets/lldap_admin_password.txt
+  authelia_ldap_password:
+    file: ./secrets/authelia_ldap_password.txt
 
 services:
   # Traefik - 反向代理和SSL证书管理
@@ -197,6 +206,7 @@ services:
       - PG_PORT=5432
       - PG_DATABASE=gitea
       - PG_USER=gitea
+      - BACKUP_ALL_DATABASES=1   # 同时导出 Postgres 里其它所有库（bread_admin、fishery_map、lldap …）
       - OSS_ENDPOINT=${OSS_ENDPOINT:-oss-cn-hangzhou.aliyuncs.com}
       - OSS_BUCKET=${OSS_BUCKET}
       - OSS_PREFIX=${OSS_PREFIX:-gitea-backups}
@@ -214,8 +224,44 @@ services:
       - gitea
     secrets:
       - gitea_db_password
+      - postgres_password
       - alicloud_access_key
       - alicloud_secret_key
+
+  # lldap - 轻量 LDAP 用户目录：用户/分组/密码存在 Postgres（库 lldap）里，Authelia 通过 LDAP 登录校验。
+  # 管理界面只监听服务器本机 127.0.0.1:17170，不经过 Traefik，通过 SSH 隧道访问：
+  #   ssh -N -L 17170:127.0.0.1:17170 <服务器>   然后打开 http://localhost:17170
+  lldap:
+    image: lldap/lldap:v0.6.3-alpine
+    container_name: lldap
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      LLDAP_JWT_SECRET_FILE: /run/secrets/lldap_jwt_secret
+      LLDAP_KEY_SEED_FILE: /run/secrets/lldap_key_seed
+      LLDAP_LDAP_USER_PASS_FILE: /run/secrets/lldap_admin_password
+      LLDAP_LDAP_BASE_DN: ${LLDAP_BASE_DN:?请在 .env 里设置，例如 dc=example,dc=com（运行 scripts/setup-lldap.sh 会自动生成）}
+      LLDAP_DATABASE_URL: ${LLDAP_DATABASE_URL:?请在 .env 里设置（运行 scripts/setup-lldap.sh 会自动生成）}
+    secrets:
+      - lldap_jwt_secret
+      - lldap_key_seed
+      - lldap_admin_password
+    volumes:
+      - lldap_data:/data
+    ports:
+      - "127.0.0.1:17170:17170"
+    networks:
+      - auth        # 与 Authelia 的 LDAP 通信（3890 只在这个隔离网络里）
+      - internal    # 连接 Postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/app/lldap", "healthcheck", "--config-file", "/data/lldap_config.toml"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
 
   # Redis - 保存 Authelia 的登录会话（重启 Authelia 不会把所有人登出）
   authelia-redis:
