@@ -2,7 +2,7 @@
 """lldap 初始化（lldap 起来之后运行一次，可重复运行）：
   1) 创建 Authelia 用的只读绑定账号 `authelia`（加入 lldap_strict_readonly 组），密码取自 secrets/authelia_ldap_password.txt
   2) 若给了 --seed 文件，按其中的分组/用户创建（不设置用户密码，密码请在管理界面里由本人设置）
-用法： lldap-bootstrap.py [--seed seed.yml]
+用法： lldap-bootstrap.py [--seed seed.yml] [--delete-user 用户ID ...]
 seed.yml 格式：
   groups: [组名, ...]
   users:
@@ -111,6 +111,16 @@ def main():
                     join(uid, g)
             except RuntimeError as e:   # 例如 lldap 不接受某些用户名字符；不中断其它用户
                 print(f"  ✘ 用户 {uid} 创建/加组失败: {e}", file=sys.stderr)
+    # 3) 可选：删除指定用户（例如界面里无法处理的非 ASCII 用户名；lldap 0.6.3 对这类用户 ID 的管理界面有缺陷）
+    argv = sys.argv
+    for i, a in enumerate(argv):
+        if a == "--delete-user" and i + 1 < len(argv):
+            uid = argv[i + 1]
+            if uid in users:
+                gql(token, "mutation($u:String!){deleteUser(userId:$u){ok}}", {"u": uid})
+                print(f"  已删除用户 {uid}")
+            else:
+                print(f"  用户 {uid} 不存在，跳过")
     print("完成")
 
 
