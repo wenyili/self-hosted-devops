@@ -1,12 +1,18 @@
 # 复制为 local.yml 并按你的环境修改（该文件已被 .gitignore 忽略）
+authentication_backend:
+  ldap:
+    base_dn: dc=example,dc=com
+    # 只读绑定账号（在 lldap 里创建 authelia 用户并加入 lldap_strict_readonly 组，密码见 secrets/authelia_ldap_password.txt）
+    user: uid=authelia,ou=people,dc=example,dc=com
+
 access_control:
   default_policy: deny
   rules:
-    # 按应用限定可登录的用户；也可以用 group:xxx（组在 users_database.yml 里定义）
+    # 按 lldap 里的分组授权（分组成员在 lldap 管理界面里调整，不用改这里）
     - domain:
         - app.example.com
       subject:
-        - 'user:alice'
+        - 'group:app-users'
       policy: one_factor
 
 session:

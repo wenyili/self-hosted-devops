@@ -1,9 +1,0 @@
-# 复制为 users_database.yml（该文件含密码 hash，已在 .gitignore 中，不要提交）
-# 生成 hash：docker run --rm -it authelia/authelia:4.39 authelia crypto hash generate argon2
-users:
-  liwenyi:
-    displayname: liwenyi
-    password: "$argon2id$..."
-    email: you@example.com
-    groups:
-      - admins
