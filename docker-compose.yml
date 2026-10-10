@@ -265,6 +265,21 @@ services:
       retries: 3
       start_period: 15s
 
+  # 无权访问页：已登录但没有权限的用户访问某个应用时，Authelia 返回 403，Traefik 的 errors 中间件（authelia-forbidden）
+  # 会改为返回这个页面，页面再把用户带到 Authelia 的退出+登录页，方便换账号登录。
+  forbidden:
+    image: nginx:alpine
+    container_name: forbidden
+    restart: unless-stopped
+    logging: *default-logging
+    volumes:
+      - ./forbidden:/usr/share/nginx/html:ro
+    networks:
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.forbidden-page.loadbalancer.server.port=80"
+
   # Redis - 保存 Authelia 的登录会话（重启 Authelia 不会把所有人登出）
   authelia-redis:
     image: redis:7-alpine
@@ -320,6 +335,11 @@ services:
       - "traefik.http.routers.authelia.tls.certresolver=letsencrypt"
       - "traefik.http.services.authelia.loadbalancer.server.port=9091"
       # 供各应用引用：traefik.http.routers.<app>.middlewares=authelia@docker,...
-      - "traefik.http.middlewares.authelia.forwardauth.address=http://authelia:9091/api/authz/forward-auth"
-      - "traefik.http.middlewares.authelia.forwardauth.trustForwardHeader=true"
-      - "traefik.http.middlewares.authelia.forwardauth.authResponseHeaders=Remote-User,Remote-Groups,Remote-Name,Remote-Email"
+      # authelia = 链：先套一层 errors（把 403 换成跳转到登录页的提示页），再做转发认证
+      - "traefik.http.middlewares.authelia.chain.middlewares=authelia-forbidden@docker,authelia-core@docker"
+      - "traefik.http.middlewares.authelia-forbidden.errors.status=403"
+      - "traefik.http.middlewares.authelia-forbidden.errors.service=forbidden-page@docker"
+      - "traefik.http.middlewares.authelia-forbidden.errors.query=/forbidden.html"
+      - "traefik.http.middlewares.authelia-core.forwardauth.address=http://authelia:9091/api/authz/forward-auth"
+      - "traefik.http.middlewares.authelia-core.forwardauth.trustForwardHeader=true"
+      - "traefik.http.middlewares.authelia-core.forwardauth.authResponseHeaders=Remote-User,Remote-Groups,Remote-Name,Remote-Email"
