@@ -239,6 +239,8 @@ services:
     environment:
       LLDAP_JWT_SECRET_FILE: /run/secrets/lldap_jwt_secret
       LLDAP_KEY_SEED_FILE: /run/secrets/lldap_key_seed
+      # lldap 自己的管理员账号名（默认叫 admin，会和应用里的普通用户 admin 重名，所以改名）
+      LLDAP_LDAP_USER_DN: lldap-admin
       LLDAP_LDAP_USER_PASS_FILE: /run/secrets/lldap_admin_password
       LLDAP_LDAP_BASE_DN: ${LLDAP_BASE_DN:?请在 .env 里设置，例如 dc=example,dc=com（运行 scripts/setup-lldap.sh 会自动生成）}
       LLDAP_DATABASE_URL: ${LLDAP_DATABASE_URL:?请在 .env 里设置（运行 scripts/setup-lldap.sh 会自动生成）}

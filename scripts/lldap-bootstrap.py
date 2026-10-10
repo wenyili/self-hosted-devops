@@ -7,7 +7,8 @@ seed.yml 格式：
   groups: [组名, ...]
   users:
     用户名: {email: a@b.c, displayname: 显示名, groups: [组名, ...]}
-管理员密码从 secrets/lldap_admin_password.txt 读取，不会打印。
+lldap 管理员账号名是 lldap-admin（密码在 secrets/lldap_admin_password.txt，不会打印）；
+种子里的普通用户即使叫 admin 也不会和它混淆。脚本还会确保普通用户不在 lldap_admin 组里。
 """
 import json, os, subprocess, sys, urllib.request
 import yaml
@@ -36,7 +37,7 @@ def gql(token, query, variables=None):
 
 
 def main():
-    token = post("/auth/simple/login", {"username": "admin", "password": read("lldap_admin_password.txt")})["token"]
+    token = post("/auth/simple/login", {"username": "lldap-admin", "password": read("lldap_admin_password.txt")})["token"]
     groups = {g["displayName"]: g["id"] for g in gql(token, "{groups{id displayName}}")["groups"]}
     users = {u["id"] for u in gql(token, "{users{id}}")["users"]}
 
@@ -60,6 +61,15 @@ def main():
         except RuntimeError as e:
             if "already" not in str(e).lower() and "duplicate" not in str(e).lower() and "unique" not in str(e).lower():
                 raise
+
+    # 0) 普通用户不应是 lldap 管理员（早期版本里内置管理员叫 admin，会与应用里的 admin 用户重名）
+    admin_gid = groups.get("lldap_admin")
+    if admin_gid is not None:
+        members = gql(token, "query($g:Int!){group(groupId:$g){users{id}}}", {"g": admin_gid})["group"]["users"]
+        for m in members:
+            if m["id"] != "lldap-admin":
+                gql(token, "mutation($u:String!,$g:Int!){removeUserFromGroup(userId:$u,groupId:$g){ok}}", {"u": m["id"], "g": admin_gid})
+                print(f"  已把 {m['id']} 移出 lldap_admin 组（降为普通用户）")
 
     # 1) Authelia 的只读绑定账号
     if "authelia" not in users:
