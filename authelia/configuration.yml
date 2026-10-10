@@ -3,6 +3,14 @@ theme: auto
 
 server:
   address: tcp://0.0.0.0:9091
+  endpoints:
+    authz:
+      forward-auth:
+        implementation: ForwardAuth
+        # 只认登录 cookie，忽略请求里的 Authorization 头。否则浏览器缓存的旧 Basic 凭据会被当成一次登录尝试，
+        # 校验失败后返回 401 + WWW-Authenticate: Basic，浏览器就会弹出原生的 Basic 登录框，而不是跳转到登录页。
+        authn_strategies:
+          - name: CookieSession
 
 log:
   level: info
