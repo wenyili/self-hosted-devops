@@ -8,12 +8,17 @@ log:
   level: info
 
 authentication_backend:
-  file:
-    path: /config/users_database.yml
+  # 用户与分组在 lldap（LDAP 目录，存 Postgres）里管理。base_dn 与绑定账号 DN 属于站点配置，在 local.yml。
+  ldap:
+    implementation: lldap
+    address: ldap://lldap:3890
+  # 改密码、重置密码都在 lldap 管理界面里做，Authelia 网页上不提供
   password_reset:
     disable: true
+  password_change:
+    disable: true
 
-# access_control 与 session.cookies（域名、用户名）见 local.yml，示例见 local.yml.example
+# access_control、session.cookies、ldap 的 base_dn/绑定 DN（域名与分组名）见 local.yml，示例见 local.yml.example
 # 会话存 Redis（authelia-redis，仅 authelia 能访问）；session.cookies（域名）在 local.yml
 session:
   redis:

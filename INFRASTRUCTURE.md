@@ -29,10 +29,9 @@
 - **功能**：为 `myapps.${BASE_DOMAIN}` 下的应用提供一次登录、全站通用的会话（cookie 域 `.${BASE_DOMAIN}`，默认 30 天，"记住我" 1 年）
 - **访问**：`auth.${BASE_DOMAIN}`
 - **接入方式**：应用 router 的 middlewares 里写 `authelia@docker`（放在 redirect/stripprefix 之前），不再使用 BasicAuth
-- **用户**：`authelia/users_database.yml`（不进 git，模板见 `.example`，root 所有需 sudo）；hash 用
-  `docker run --rm -it authelia/authelia:4.39 authelia crypto hash generate argon2` 生成，改文件后 `docker restart authelia`
-- **访问规则**：服务器上的 `authelia/local.yml` 由部署工具生成（域名与用户名**不入库**）：各应用的访问规则声明在私有仓库 `apps-hub` 的 `apps/<name>/access.yml`，部署时合并、校验后写入并重启 Authelia；`configuration.yml` 只放通用配置，两者合并加载
-- **用户**：`users_database.yml` 同样由部署工具生成并管理（用户清单在私有仓库里）；密码为 argon2id hash，生成方式 `docker run --rm -it authelia/authelia:4.39 authelia crypto hash generate argon2`
+- **用户目录**：lldap（LDAP，数据存 Postgres 的 `lldap` 库）。用户、分组、密码都在 lldap 管理界面里管理——界面只监听服务器本机 `127.0.0.1:17170`，通过 SSH 隧道访问：`ssh -N -L 17170:127.0.0.1:17170 <服务器>`，然后打开 `http://localhost:17170`。Authelia 用只读绑定账号 `authelia` 通过 LDAP 校验登录、读取分组
+- **访问规则**：服务器上的 `authelia/local.yml` 由部署工具生成（域名与分组名**不入库**）：各应用的访问规则声明在私有仓库 `apps-hub` 的 `apps/<name>/access.yml`，部署时合并、校验后写入并重启 Authelia；`configuration.yml` 只放通用配置，两者合并加载
+- **初始化 lldap**：`scripts/setup-lldap.sh`（生成密钥、建库、写 .env）→ `docker compose up -d lldap` → `scripts/lldap-bootstrap.py`（创建 Authelia 绑定账号，可选 `--seed` 创建分组/用户）
 - **会话存储**：Redis（`authelia-redis`，放在只有 Authelia 能访问的隔离内部网络，AOF 持久化），重启 Authelia 不会让用户重新登录
 - **密钥**：`secrets/authelia_{jwt_secret,session_secret,storage_key}.txt`
 
